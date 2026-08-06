@@ -5,6 +5,8 @@ name: FieldGuard CI
 on:
   push:
   pull_request:
+  workflow_dispatch: {}   # lets a human manually run build-test-sim (see that job's own comment --
+                           # it's gated to workflow_dispatch only until confirmed green once)
 
 permissions:
   contents: read
@@ -30,9 +32,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # ACTIVE (Week 2). Runs entirely on plain ubuntu-latest -- no Docker, no Gazebo, no ROS 2 --
   # because everything it exercises (fieldguard_planning geometry, the ADR-003 eval spike harness,
-  # the stdlib generator scripts) is deliberately pure-Python so it CAN run in CI before the
-  # Gazebo/ArduPilot container exists. The real headless-sim job is the commented `build-test-sim`
-  # job below, still blocked on the Docker image.
+  # the stdlib generator scripts) is deliberately pure-Python, runs on every push, and needs no image.
+  # The real headless-sim job is `build-test-sim` below (added Weeks 5-6, 2026-08-05) -- it needs the
+  # Docker/Gazebo image and is manual-dispatch-only until a human confirms it runs green.
   #
   # Dependency policy (CLAUDE.md "pin everything"): tests/fieldguard_planning is stdlib-only by
   # design (zero install step). Only the eval/ spike harness needs numpy+scipy, pinned in
@@ -95,30 +97,69 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  # READY TO GROW (Week 2+). Uncomment once the colcon workspace, the Docker
-  # image (built by devops-reliability-engineer), and the eval harness exist.
-  # This is the real pipeline: build → test → headless sim smoke → eval metrics.
+  # PROMOTED Weeks 5-6 (2026-08-05, devops-reliability-engineer) from "deferred until the image
+  # exists" to committed -- see docs/WEEK5_CI_GAZEBO.md for the full plan, the honest feasibility
+  # verdict on GitHub-hosted-runner Gazebo rendering (short version: NOT proven even by the upstream
+  # ardupilot_gazebo/ardupilot projects' own CI, which build/lint-only on hosted runners -- see that
+  # doc's "Feasibility verdict"), and the cut-list.
+  #
+  # ⚠️ MANUAL-DISPATCH ONLY (workflow_dispatch) until a human confirms one green run. This job pulls a
+  # PREBUILT image (published by .github/workflows/sim-image.yml, itself manual/on-Dockerfile-change
+  # only -- never rebuilds Gazebo+ArduPilot+ROS2 from scratch on every push) and flies a short (2-lane)
+  # scripted mission through the farm world, headless. This job does NOT consume the ADR-007 NDVI
+  # camera/thermal topics (no DDS, no ndvi_node) -- but the vehicle model it flies now DOES carry that
+  # sensor pair (landed uncommitted mid-Week-5 by robotics-sim-engineer), so Gazebo's Sensors system
+  # still renders it every frame regardless. Per docs/ROADMAP.md's Week-5 ordering, this job should run
+  # AFTER the human's batched render-verification session (items 1-3: thermal kill-switch, pixel smoke
+  # test, ADR-003 real-render re-confirm) -- see docs/WEEK5_CI_GAZEBO.md "Eval-gate hook" and its cut-
+  # list item 6 (a camera-free CI-only world) if rendering makes this job unreliable. Flip the trigger
+  # to `pull_request`/`push` only after a confirmed-green run -- do NOT flip it blind.
   # ---------------------------------------------------------------------------
-  # build-test-sim:
-  #   name: colcon build + tests + headless sim smoke + eval
-  #   runs-on: ubuntu-latest
-  #   container: ghcr.io/vihanpatil/fieldguard:latest   # pinned ROS 2 + Gazebo + ArduPilot image
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: colcon build
-  #       run: colcon build --symlink-install
-  #     - name: Unit + integration tests
-  #       run: |
-  #         colcon test
-  #         colcon test-result --verbose
-  #     - name: Headless sim smoke scenario + eval harness
-  #       run: |
-  #         source install/setup.bash
-  #         ./scripts/run_eval.sh --headless --scenario smoke
-  #     - name: Upload eval metrics
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: eval-metrics
-  #         path: eval/results/
-  #     # Fail the build if avoidance success or coverage completeness regresses
-  #     # (thresholds enforced inside run_eval.sh — owned by perception-ml-engineer + qa-safety-reviewer).
+  build-test-sim:
+    name: Headless Gazebo/SITL smoke flight (manual until confirmed green)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read   # pull ghcr.io image published by sim-image.yml; needed even if the package
+                        # ends up private (default for a new GHCR package) -- harmless if it's public
+    container:
+      # GHCR requires a lowercase image path; github.repository_owner is 'vihanpatil' (already
+      # lowercase) for this repo, matching the tag sim-image.yml pushes -- if the owner ever changes
+      # to something with uppercase, this needs a job-level lowercase workaround (container.image is
+      # resolved before any step runs, so it can't reuse a step-computed value the way sim-image.yml's
+      # OWNER_LC does).
+      image: ghcr.io/${{ github.repository_owner }}/fieldguard-sim:latest
+      options: --user root
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Headless Gazebo + SITL scripted smoke mission (2 lanes, no camera render)
+        run: |
+          set -euo pipefail
+          bash scripts/ci_sim_smoke.sh
+
+      - name: Assert the scripted mission actually completed (no regression)
+        run: |
+          set -euo pipefail
+          python3 scripts/check_sim_smoke.py eval/results/sim_smoke.json
+
+      - name: Upload smoke-flight artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-smoke-metrics
+          path: |
+            eval/results/sim_smoke.json
+            /tmp/ci_smoke_gz.log
+            /tmp/ci_smoke_sitl.log
+          if-no-files-found: warn
+
+  # NEXT (not built yet -- see docs/WEEK5_CI_GAZEBO.md "Eval-gate hook"): once the ADR-007 real NDVI
+  # render exists in sim/worlds/farmguard_field.sdf, extend build-test-sim to run eval/run_spike.sh
+  # against the REAL render's output (drop-in per sim/spike/README.md's schema) and gate on FNR
+  # regression the same way scripts/check_spike_regression.py already gates the synthetic clip.

@@ -72,14 +72,82 @@
             <diffuse>0.30 0.42 0.20 1</diffuse>
             <specular>0.05 0.05 0.05 1</specular>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>282.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
 
-    <include>
-      <uri>model://iris_with_gimbal</uri>
+    <model name="iris_with_gimbal_ndvi">
       <pose degrees="true">0 0 0.195 0 0 90</pose>
-    </include>
+      <include>
+        <uri>model://iris_with_gimbal</uri>
+      </include>
+
+      <!-- ADR-007: co-located RGB (Red band) + thermal (synthetic NIR) camera pair, ONE rigid
+           nadir mount (no gimbal), rigidly fixed to the airframe (iris_with_standoffs::base_link),
+           NOT the 3-axis RC gimbal. Both sensors live on this SAME link at the SAME zero-offset
+           pose, so intrinsics/pose/rate are identical by construction: pixel-wise fusion needs no
+           resampling. See config/ndvi_camera.json for the source values and calibration notes. -->
+      <link name="fg_sensor_mount">
+        <pose>0.0 0.0 -0.08 3.141592653589793 0.0 0.0</pose>
+        <inertial>
+          <mass>0.05</mass>
+          <inertia>
+            <ixx>1e-05</ixx><ixy>0</ixy><ixz>0</ixz>
+            <iyy>1e-05</iyy><iyz>0</iyz>
+            <izz>1e-05</izz>
+          </inertia>
+        </inertial>
+
+        <sensor name="fg_rgb_camera" type="camera">
+          <pose>0 0 0 0 0 0</pose>
+          <camera>
+            <camera_info_topic>fg/sensor/rgb/camera_info</camera_info_topic>
+            <horizontal_fov>1.1033</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip><near>0.1</near><far>100.0</far></clip>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>5.0</update_rate>
+          <visualize>true</visualize>
+          <topic>fg/sensor/rgb/image</topic>
+        </sensor>
+
+        <sensor name="fg_nir_camera" type="thermal">
+          <pose>0 0 0 0 0 0</pose>
+          <camera>
+            <camera_info_topic>fg/sensor/nir/camera_info</camera_info_topic>
+            <horizontal_fov>1.1033</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>L16</format>
+            </image>
+            <clip><near>0.1</near><far>100.0</far></clip>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>5.0</update_rate>
+          <visualize>true</visualize>
+          <topic>fg/sensor/nir/image</topic>
+          <plugin filename="gz-sim-thermal-sensor-system" name="gz::sim::systems::ThermalSensor">
+            <min_temp>270.0</min_temp>
+            <max_temp>330.0</max_temp>
+            <resolution>0.01</resolution>
+          </plugin>
+        </sensor>
+      </link>
+
+      <joint name="fg_sensor_mount_joint" type="fixed">
+        <parent>iris_with_gimbal::base_link</parent>
+        <child>fg_sensor_mount</child>
+      </joint>
+    </model>
 
     <!-- Static obstacles (ADR-001): known tree positions from a pre-flight boundary survey, geofenced; see config/static_obstacles.json for the machine-readable export flight-software consumes. Kept in sync with this world by scripts/gen_farm_world.py generating both from the same layout. -->
     <model name="tree_row0_0">
@@ -96,6 +164,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -109,6 +180,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -127,6 +201,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -140,6 +217,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -158,6 +238,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -171,6 +254,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -189,6 +275,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -202,6 +291,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -220,6 +312,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -233,6 +328,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -251,6 +349,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -264,6 +365,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -282,6 +386,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -295,6 +402,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -313,6 +423,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -326,6 +439,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -344,6 +460,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -357,6 +476,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -375,6 +497,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -388,6 +513,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -406,6 +534,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -419,6 +550,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -437,6 +571,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -450,6 +587,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -468,6 +608,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -481,6 +624,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -499,6 +645,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -512,6 +661,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -530,6 +682,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -543,6 +698,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -561,6 +719,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -574,6 +735,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -592,6 +756,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -605,6 +772,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -623,6 +793,9 @@
             <ambient>0.35 0.22 0.10 1</ambient>
             <diffuse>0.35 0.22 0.10 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>291.0</temperature>
+          </plugin>
         </visual>
       </link>
       <link name="canopy">
@@ -636,6 +809,9 @@
             <ambient>0.12 0.32 0.12 1</ambient>
             <diffuse>0.12 0.32 0.12 1</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>321.0</temperature>
+          </plugin>
         </visual>
       </link>
     </model>
@@ -649,6 +825,9 @@
             <ambient>0.12 0.12 0.12 1.0</ambient>
             <diffuse>0.12 0.12 0.12 1.0</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>273.0</temperature>
+          </plugin>
         </visual>
       </link>
       <script>
@@ -671,6 +850,9 @@
             <ambient>0.3 0.22 0.1 1.0</ambient>
             <diffuse>0.3 0.22 0.1 1.0</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>273.0</temperature>
+          </plugin>
         </visual>
       </link>
       <script>
@@ -693,6 +875,9 @@
             <ambient>0.18 0.18 0.2 1.0</ambient>
             <diffuse>0.18 0.18 0.2 1.0</diffuse>
           </material>
+          <plugin filename="gz-sim-thermal-system" name="gz::sim::systems::Thermal">
+            <temperature>273.0</temperature>
+          </plugin>
         </visual>
       </link>
       <script>

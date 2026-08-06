@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "note": "ADR-007 dual-band NDVI sensor mount (docs/DECISIONS.md): a co-located RGB (Red band) + Gazebo thermal (synthetic NIR) camera pair on ONE rigid nadir mount. Consumed by scripts/gen_farm_world.py to emit the sensor mount + per-visual <temperature> plugins in sim/worlds/farmguard_field.sdf -- do not hand-edit the generated SDF, edit this file and regenerate. This is the single source of truth for camera intrinsics/rate and the material temperature calibration; flight-software's future ndvi_node (Weeks 5-6, downstream of this file) should read min_temp/max_temp/resolution_k_per_count from here (or from the live /fg/sensor/nir/camera_info + the ThermalSensor plugin values baked into the SDF) rather than hardcoding them a second time.",
+
+  "mount": {
+    "note": "Attached via SDF nested-model composition + a <joint type='fixed'>, NOT the vehicle's existing 3-axis RC gimbal (model://gimbal_small_3d) -- ADR-007 requires a rigid, non-gimbaled nadir mount matching the sim/spike/gen_spike_clip.py extrinsic. iris_with_gimbal (ArduPilot/ardupilot_gazebo, pinned SHA in CLAUDE.md) is wrapped, not forked: sim/worlds/farmguard_field.sdf's iris_with_gimbal_ndvi model still <include>s model://iris_with_gimbal verbatim and adds a new sibling link + fixed joint pointing at its airframe link.",
+    "parent_model_include_uri": "model://iris_with_gimbal",
+    "parent_link_scoped_from_wrapper": "iris_with_gimbal::base_link",
+    "parent_link_scoped_source": "CORRECTED live 2026-08-05 after Gate-0 error 'parent frame [iris_with_gimbal::iris_with_standoffs::base_link] ... not found'. iris_with_gimbal pulls in model://iris_with_standoffs with <include merge=\"true\">, so base_link is FLATTENED directly into iris_with_gimbal (not kept under an iris_with_standoffs:: sub-scope) -- proven by the fact that the fully-nested path did NOT resolve, whereas iris_with_gimbal's own gimbal_joint likewise references a bare 'base_link'. From the non-merge wrapper iris_with_gimbal_ndvi the airframe link is therefore iris_with_gimbal::base_link. (base_link sits at iris_with_gimbal's own origin, pose 0 0 0 0 0 0, so no offset math needed.)",
+    "mount_link_name": "fg_sensor_mount",
+    "mount_pose_xyz_rpy": [0.0, 0.0, -0.08, 3.141592653589793, 0.0, 0.0],
+    "mount_pose_note": "roll=pi (matches the ADR-007/spike nadir extrinsic quat_wxyz=(0,1,0,0): camera X=body+X, Y=body-Y, Z=body-Z, looks straight down when level). z=-0.08m: 8cm below the airframe origin, clear of the landing-standoff legs (bottom of legs ~ -0.195m below base_link per iris_with_standoffs/model.sdf's leg collision poses) and matching this world's existing vehicle spawn ground-clearance (0.195m, see the <include> pose already in the world).",
+    "mount_mass_kg": 0.05,
+    "mount_inertia_diag": [1e-5, 1e-5, 1e-5],
+    "mount_inertia_note": "small but non-zero (physics engines need valid inertial properties on every link even for a fixed-joint accessory); negligible next to the airframe's 1.5kg body mass, matches the scale ArduPilot's own gimbal_small_3d base_link uses (0.2kg)."
+  },
+
+  "camera": {
+    "note": "RGB and thermal sensors share these EXACT values on purpose (ADR-007 hard requirement: identical intrinsics/pose/update_rate so the future ndvi_node combines them pixel-wise with no resampling). Both are declared on the SAME link (fg_sensor_mount) at the same zero-offset <pose>, so co-location is exact (zero baseline), not just nominally matched.",
+    "image_width_px": 640,
+    "image_height_px": 480,
+    "horizontal_fov_rad": 1.1033,
+    "horizontal_fov_note": "chosen to reproduce sim/spike/scenario_default.json's pinhole intrinsics (fx=fy=520px @ 640px width => hfov = 2*atan(320/520) = 1.10331 rad = 63.2 deg) for continuity with the ADR-003 spike/eval harness, which assumes this camera model.",
+    "update_rate_hz": 5.0,
+    "update_rate_note": "modest on purpose: macOS Docker Desktop has no GPU passthrough (docs/WEEK1_BRINGUP.md gotcha #1, ogre2 falls back to llvmpipe software rendering) and this mount now renders TWO camera-type sensors per frame on top of 18 trees + 3 actors. Raise once Gate 1 confirms headroom; lower (or drop resolution) first if the render can't keep up.",
+    "clip_near_m": 0.1,
+    "clip_far_m": 100.0,
+    "topics": {
+      "rgb_image": "/fg/sensor/rgb/image",
+      "rgb_camera_info": "/fg/sensor/rgb/camera_info",
+      "nir_image": "/fg/sensor/nir/image",
+      "nir_camera_info": "/fg/sensor/nir/camera_info"
+    }
+  },
+
+  "thermal": {
+    "note": "Gazebo's gz-sim-thermal-system / ThermalCameraSensor repurposed as synthetic NIR (ADR-007). L16 packs each pixel as round(temperature_kelvin / resolution_k_per_count) -- NOT offset by min_temp -- verified against pinned-branch (gz-sensors8 == Harmonic) source: src/ThermalCameraSensor.cc (resolution default/sanity-check) and gz-rendering8 ogre2/src/Ogre2ThermalCamera.cc ('const float color = (temp / this->resolution) / ...'). min_temp/max_temp here are the camera's declared visible range (gz-sim-thermal-sensor-system plugin), used as the calibration span for ndvi_camera.temperature_calibration below; they do not themselves change the packing formula.",
+    "format": "L16",
+    "ros_encoding": "mono16",
+    "min_temp_k": 270.0,
+    "max_temp_k": 330.0,
+    "resolution_k_per_count": 0.01,
+    "decode_formula": "T_kelvin = raw_uint16 * resolution_k_per_count; rho_nir = clip((T_kelvin - min_temp_k) / (max_temp_k - min_temp_k), 0, 1)"
+  },
+
+  "temperature_calibration": {
+    "note": "Per-material-class <temperature> (Kelvin) authored on EVERY visual in the world (18 trees x {trunk,canopy}, field_ground, 3 birds -- see scripts/gen_farm_world.py) so no object silently falls back to ambient temperature (the review's called-out failure mode: 'every object returns ambient -> flat, meaningless NDVI'). rho_nir is a synthetic NIR-reflectance proxy in [0,1]; T_kelvin = min_temp_k + rho_nir*(max_temp_k-min_temp_k) using the thermal.min_temp_k/max_temp_k span above. Deliberately monotonic and well-separated (canopy > trunk > soil > bird, each step >= 9K / rho >=0.15) so the Gate 2 pixel smoke test (scripts/check_ndvi_bands.py) has an unambiguous, assertable signature -- these are illustrative synthetic values, not radiometric ground truth (see ADR-007 'known-honest caveat').",
+    "canopy": {"rho_nir": 0.85, "temperature_k": 321.0, "used_by": "every tree's canopy_visual (healthy-vegetation proxy, uniform -- no per-tree NDVI variation needed for this gate)"},
+    "trunk":  {"rho_nir": 0.35, "temperature_k": 291.0, "used_by": "every tree's trunk_visual (woody bark, low-NIR but distinct from bare soil and canopy)"},
+    "soil":   {"rho_nir": 0.20, "temperature_k": 282.0, "used_by": "field_ground (bare inter-row ground plane)"},
+    "bird":   {"rho_nir": 0.05, "temperature_k": 273.0, "used_by": "all 3 bird actor visuals (non-vegetation, most distinct from canopy/soil on purpose)"}
+  }
+}

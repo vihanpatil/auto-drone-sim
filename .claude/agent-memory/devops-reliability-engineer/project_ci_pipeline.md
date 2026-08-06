@@ -1,13 +1,14 @@
 ---
 name: project-ci-pipeline
-description: FieldGuard CI structure, pinned deps, and exact commands as of the Week 2 planning+eval job (2026-08-04)
+description: FieldGuard CI structure, pinned deps, and exact commands (Week 2 planning+eval job 2026-08-04; Weeks 5-6 build-test-sim job added 2026-08-05, see [[project_week5_ci_gazebo]])
 metadata:
   type: project
 ---
 
 CI lives at `.github/workflows/ci.yml`, on plain `ubuntu-latest`, `python-version: "3.12"` via
-`actions/setup-python@v5`. Two active jobs (a third, `build-test-sim`, is commented out and
-blocked on the Docker/Gazebo image — do not uncomment until that image exists):
+`actions/setup-python@v5`. Three jobs now (as of 2026-08-05; `build-test-sim` was promoted from a
+commented-out stub to a real, manual-dispatch-gated job — see [[project_week5_ci_gazebo]] for the
+full plan, feasibility verdict, and what's still unverified):
 
 1. `validate-config` — runs `scripts/validate_agents.py` (needs `pyyaml`, installed inline/unpinned
    in that job — deliberately left untouched per the Week 2 task's explicit instruction to keep it
@@ -29,6 +30,13 @@ blocked on the Docker/Gazebo image — do not uncomment until that image exists)
      regression gate, asserts `approaches.a_ndvi_direct.per_bird_track_fnr == 0.0` on the seed-42
      baseline (parses `score.py`'s own machine-readable JSON output; does not invent a new format).
    - Uploads `eval/results/` as the `eval-spike-metrics` artifact (`if: always()`).
+3. `build-test-sim` (added 2026-08-05, Weeks 5-6, `if: github.event_name == 'workflow_dispatch'` —
+   NOT on every push yet) — pulls `ghcr.io/<owner>/fieldguard-sim:latest` (published by the separate
+   `sim-image.yml` workflow, decoupled from push cadence), runs `scripts/ci_sim_smoke.sh` (headless
+   `gz sim` + `sim_vehicle.py --no-mavproxy` + a pymavlink driver flying a 2-lane scripted mission
+   through the farm world, no camera/DDS), then gates on `scripts/check_sim_smoke.py`. **Never
+   executed against a live runner as of 2026-08-05** — see [[project_week5_ci_gazebo]] before touching
+   this job or flipping its trigger off manual-dispatch.
 
 Local verification commands (run these, not `pip install` blind, before touching this pipeline
 again):

@@ -1,3 +1,4 @@
 - [ADR-003 NDVI detection decided](project_adr003-ndvi-detection.md) — NDVI-direct accepted, pending real-Gazebo-render re-confirmation; no model justified yet
 - [ADR-005 AP_DDS contract locked](project_adr005-apdds-contract.md) — /ap/* map locked to pinned SHA; live-bridge ros2 topic confirmation still owed (batch with ADR-003 in Docker run)
 - [ADR-006 avoidance executor](project_adr006-avoidance-executor.md) — core loop = AUTO->GUIDED->AUTO, our code owns maneuver; cmd in map/ENU, MIS_RESTART=0; live resume confirmation owed
+- [ADR-007 NDVI render](project_adr007-ndvi-render.md) — Red=RGB cam, NIR=thermal sensor repurposed (per-model temp); NDVI in ROS node; /fg/* contract locked; render unproven live (batch w/ ADR-003)

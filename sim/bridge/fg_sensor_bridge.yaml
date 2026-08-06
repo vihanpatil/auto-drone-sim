@@ -1,0 +1,46 @@
+# FieldGuard ADR-007 NDVI sensor bridge -- ros_gz_bridge parameter_bridge config file.
+#
+# Bridges the four locked /fg/sensor/* topics (docs/DECISIONS.md ADR-007) from Gazebo to ROS 2.
+# GZ_TO_ROS only: these are camera outputs, nothing ever publishes back into Gazebo on these
+# topics. gz_topic_name == ros_topic_name by construction (sim/worlds/farmguard_field.sdf's
+# <topic>/<camera_info_topic> values, generated from config/ndvi_camera.json, already match this
+# file 1:1) -- this is a pure encoding/type bridge, not a rename.
+#
+# Run (inside the fieldguard-sim container, ROS 2 sourced, after Gazebo is up -- see
+# docs/WEEK5_VALIDATION.md Gate 1):
+#   ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:=/workspace/fieldguard/sim/bridge/fg_sensor_bridge.yaml
+#
+# Manual/equivalent one-liner (same effect, no YAML file -- useful for a quick sanity check):
+#   ros2 run ros_gz_bridge parameter_bridge \
+#     /fg/sensor/rgb/image]sensor_msgs/msg/Image]gz.msgs.Image \
+#     /fg/sensor/rgb/camera_info]sensor_msgs/msg/CameraInfo]gz.msgs.CameraInfo \
+#     /fg/sensor/nir/image]sensor_msgs/msg/Image]gz.msgs.Image \
+#     /fg/sensor/nir/camera_info]sensor_msgs/msg/CameraInfo]gz.msgs.CameraInfo
+#
+# YAML field names (ros_topic_name/gz_topic_name/ros_type_name/gz_type_name/direction) verified
+# against the pinned ros_gz `ros2` branch's parameter_bridge README -- NOT run live yet, see
+# docs/WEEK5_VALIDATION.md Gate 1.
+
+- ros_topic_name: "/fg/sensor/rgb/image"
+  gz_topic_name: "/fg/sensor/rgb/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/fg/sensor/rgb/camera_info"
+  gz_topic_name: "/fg/sensor/rgb/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/fg/sensor/nir/image"
+  gz_topic_name: "/fg/sensor/nir/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/fg/sensor/nir/camera_info"
+  gz_topic_name: "/fg/sensor/nir/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS

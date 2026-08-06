@@ -1,0 +1,106 @@
+# FieldGuard — CI/CD sim image (Weeks 5-6 devops task, 2026-08-05).
+#
+# ⚠️ STATUS: UNVERIFIED ON A LIVE RUNNER. Written and reviewed by devops-reliability-engineer without
+# access to a live Docker/Gazebo runner in that session — see docs/WEEK5_CI_GAZEBO.md for the honest
+# feasibility verdict, what still needs a human, and the cut-list if this proves too heavy for
+# GitHub-hosted runners. Do not treat a clean `docker build` as proof this works inside GitHub
+# Actions' resource envelope (2 vCPU... actually 4 vCPU / 16GB RAM / 14GB SSD on public ubuntu-latest
+# — still less disk than WEEK1_BRINGUP.md's documented minimum of 40GB, and the workspace build has
+# already OOM'd once on a MORE generously resourced local Docker Desktop config, see that doc's §3
+# MEMORY gotcha). First human build of this image MUST watch disk and memory, not just wait for green.
+#
+# WHAT THIS IS: bakes the pinned-SHA ROS 2 Humble + Gazebo Harmonic + ArduPilot SITL + ardupilot_gazebo
+# workspace into image LAYERS, so CI never re-runs the ~hours-long from-scratch workspace build on
+# every push (sim/docker/Dockerfile, the Week 1 interactive image, deliberately leaves the workspace
+# unbuilt onto a named volume — see that file's own header — good for a human debugging bringup step
+# by step, bad for a CI job that needs to be fast and repeatable). Built by the separate
+# `.github/workflows/sim-image.yml` workflow (on Dockerfile.ci changes or manual dispatch, NOT on every
+# push/PR), pushed to GHCR, and pulled — not rebuilt — by ci.yml's `build-test-sim` job.
+#
+# SCOPE CUT (2026-08-05, timebox discipline — see docs/WEEK5_CI_GAZEBO.md cut-list item 1): this image
+# builds ArduPilot SITL WITHOUT --enable-DDS. The Weeks 5-6 CI smoke job only needs to prove "the farm
+# world flies a scripted mission headless" (Gate-1-equivalent) — it does NOT run the ROS 2 avoidance
+# loop (that's already unit-tested sim-agnostically in the no-Docker `planning-and-eval` CI job). Adding
+# --enable-DDS doubles the ArduPilot build (a full waf reconfigure+recompile per WEEK1_BRINGUP.md §6b)
+# for a capability this job doesn't exercise yet. A DDS-enabled variant is a documented follow-up, not
+# built here — see the plan doc.
+#
+# Build (human machine or sim-image.yml; NOT run automatically by this session):
+#   docker build -f sim/docker/Dockerfile.ci -t fieldguard-sim:ci .
+# Requires sim/docker/Dockerfile (fieldguard-sim:week1) to already be built locally, OR change the
+# FROM line below to a pushed base-image tag once one exists in GHCR.
+
+FROM fieldguard-sim:week1
+
+# Route compiler invocations through ccache (already installed by the base image's "ArduPilot +
+# ros_gz build prerequisites" apt step) so a second build after a small Dockerfile.ci edit — or a
+# GH Actions run with a warm ~/.ccache persisted via actions/cache (not yet wired, see plan doc
+# cut-list) — doesn't recompile everything from scratch. No effect on a cold cache; real effect on
+# every rebuild after this line in the layer stack, which is why it's placed before any compile step.
+ENV PATH="/usr/lib/ccache:${PATH}"
+
+WORKDIR /root/ardu_ws
+RUN mkdir -p src
+
+# --- Import at branch HEAD, then hard-pin to the EXACT commit SHAs from CLAUDE.md ------------------
+# "Pinned commit SHAs (captured 2026-08-04 — first green Gazebo flight)". vcs import alone resolves
+# branch HEADs (fine for the Week 1 interactive image, where a human wants a fresh checkout each
+# bringup session) — this image instead checks out each repo to the pinned SHA, so the BAKED image is
+# reproducible byte-for-byte regardless of upstream activity after 2026-08-04, matching CLAUDE.md
+# "pin everything; a floating dependency is a future demo-day outage."
+RUN . /opt/ros/humble/setup.bash && \
+    vcs import --input https://raw.githubusercontent.com/ArduPilot/ardupilot_gz/main/ros2_gz.repos \
+        --recursive src && \
+    git clone -b humble https://github.com/micro-ROS/micro_ros_msgs.git src/micro_ros_msgs && \
+    git -C src/ardupilot        checkout 9895756d874ec9128d50918f6747a83706f4e221 && \
+    git -C src/ardupilot        submodule update --init --recursive && \
+    git -C src/ardupilot_gazebo checkout cc0290d964dfa373531963a8fc39093a0836af0a && \
+    git -C src/ardupilot_gz     checkout 8df4dc1726e37504e6fc8b952d02e554cfa3176f && \
+    git -C src/ros_gz           checkout 9d7f8c721c233a9ac8b43950129d51e67905523e
+# NOTE: `git submodule update --init --recursive` on ardupilot is belt-and-suspenders — the human
+# bringup (docs/WEEK1_BRINGUP.md §3) never called out a separate submodule step and reported a green
+# colcon build, implying `vcs import --recursive` (or ArduPilot's own build tooling) already handles
+# it. Kept explicit here anyway: it is a no-op if submodules are already present, and a build-time
+# workspace image has no human watching to notice a silently-stale submodule.
+
+# --- rosdep: resolve gz-* keys against GZ_VERSION=harmonic (already-installed OSRF rosdep rules from
+# the base image), then install everything the imported packages declare ------------------------------
+RUN . /opt/ros/humble/setup.bash && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -y
+
+# --- colcon build: the ROS 2 / Gazebo / ardupilot_gazebo / micro_ros_agent workspace -----------------
+# MAKEFLAGS="-j2" per docs/WEEK1_BRINGUP.md §3's documented OOM gotcha (ros_gz_bridge's template-heavy
+# message-conversion code has been observed to OOM the compiler at higher parallelism on a resource-
+# constrained host — exactly the risk category a GH-hosted runner's 16GB RAM sits in). If this OOMs
+# even at -j2 on the actual CI runner, drop to -j1 (slower, more likely to fit) — see plan doc cut-list.
+RUN . /opt/ros/humble/setup.bash && \
+    export GZ_VERSION=harmonic && \
+    cd /root/ardu_ws && \
+    MAKEFLAGS="-j2" colcon build --packages-up-to ardupilot_gz_bringup --executor sequential
+
+# --- ArduPilot SITL firmware build (NOT part of the colcon workspace — built separately via waf,
+# same as docs/WEEK1_BRINGUP.md §4/§6) -----------------------------------------------------------------
+# Non-interactive equivalent of `sim_vehicle.py -v ArduCopter -f gazebo-iris --model JSON` (which
+# ALSO launches an interactive MAVProxy console — wrong for a Dockerfile RUN step). `./waf configure
+# --board sitl` + `./waf copter` is the direct, documented, non-interactive ArduPilot build path;
+# `sim_vehicle.py` invokes the equivalent configure+build under the hood before it hands off to
+# MAVProxy. UNVERIFIED against this project's pinned SHA specifically — flag for the first human image
+# build to confirm the resulting build/sitl/bin/arducopter boots and flies identically to the
+# interactively-built binary already proven in docs/WEEK3_VALIDATION.md.
+RUN cd /root/ardu_ws/src/ardupilot && \
+    python3 -m pip install --no-cache-dir --upgrade MAVProxy==1.8.74 pymavlink future==1.0.0 && \
+    ./waf configure --board sitl && \
+    ./waf copter
+
+# Runtime PATH: sim_vehicle.py / the ci_sim_smoke driver need Tools/autotest on PATH without a human
+# re-exporting it every shell (docs/WEEK1_BRINGUP.md §4's `export PATH=...` becomes redundant here).
+ENV PATH="/root/ardu_ws/src/ardupilot/Tools/autotest:${PATH}"
+ENV GZ_SIM_RESOURCE_PATH="/root/ardu_ws/install/ardupilot_gazebo/share"
+
+# Bake the workspace overlay into every non-interactive shell too (RUN/CMD in a derived image or a
+# `docker run ... bash -lc`), not just interactive .bashrc sourcing — CI steps are non-interactive.
+ENV ROS_WS_SETUP="/root/ardu_ws/install/setup.bash"
+
+WORKDIR /workspace/fieldguard
+CMD ["/bin/bash"]

@@ -83,6 +83,22 @@ cat <<EOF
   ros2 topic list | grep '^/ap'      # expect ~19 topics
   ros2 topic hz /ap/pose/filtered    # steady rate, not zero
 
+[run_farm_mission] Open a FOURTH shell (docker exec -it fieldguard-sim bash) for the ADR-007 NDVI
+  sensor bridge -- Gazebo now also carries /fg/sensor/rgb/* and /fg/sensor/nir/* (dual-band NDVI
+  camera, see docs/DECISIONS.md ADR-007 and sim/README.md). NOT confirmed live yet -- run
+  docs/WEEK5_VALIDATION.md's Gate 0 BEFORE Gate 1 flying above (thermal-sensor kill-switch check):
+
+  source /root/ardu_ws/install/setup.bash
+  ros2 run ros_gz_bridge parameter_bridge --ros-args \\
+    -p config_file:=$REPO_IN_CONTAINER/sim/bridge/fg_sensor_bridge.yaml
+
+  # Then, from any shell with ROS 2 sourced:
+  ros2 topic list | grep '^/fg/sensor'    # expect 4 topics
+  ros2 topic hz /fg/sensor/nir/image      # steady rate, not zero
+
+  # Gate 2 (the actual proof -- run once Shell B is armed and flying, and this bridge is up):
+  python3 $REPO_IN_CONTAINER/scripts/check_ndvi_bands.py
+
 [run_farm_mission] Starting Gazebo now (Ctrl-C here stops the world) ...
 EOF
 

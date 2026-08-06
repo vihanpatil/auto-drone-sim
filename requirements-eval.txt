@@ -1,9 +1,13 @@
 # Pinned Python dependencies for the eval spike harness (eval/, sim/spike/) -- devops-owned.
 #
-# Only the eval harness needs third-party deps. The planning test suite
-# (tests/fieldguard_planning/, run via `python3 -m unittest discover -s tests/fieldguard_planning`)
-# is intentionally stdlib-only and does NOT need this file -- that's a feature: it stays runnable
-# on a bare Python interpreter with zero install step, in CI or on a demo machine.
+# The bulk of the planning test suite (tests/fieldguard_planning/ -- avoidance loop, coverage,
+# geofence, mission waypoints) is intentionally stdlib-only and does NOT need this file -- that's a
+# feature: it stays runnable on a bare Python interpreter with zero install step, in CI or on a demo
+# machine. Weeks 5-6 added ONE scoped exception: the NDVI fusion + georef-stitch tests
+# (test_ndvi_fusion.py, test_ndvi_georef.py, testing src/fieldguard_planning/ndvi_fusion.py /
+# ndvi_georef.py) need numpy for pixel-array math -- documented as a deliberate, scoped deviation in
+# ndvi_fusion.py's own module docstring, not a project-wide dependency change. They reuse THIS same
+# numpy pin rather than introducing a second one.
 #
 # Install:  pip install -r requirements-eval.txt
 # Verified: Python 3.12.12, macOS arm64 (2026-08-04) and targeted at the CI runner's
@@ -11,6 +15,7 @@
 #
 # Consumers: sim/spike/gen_spike_clip.py (numpy), eval/spike_common.py, eval/label_from_sim.py,
 # eval/baseline_ndvi.py, eval/baseline_rgb.py, eval/blob.py (scipy.ndimage), eval/score.py (stdlib
-# only, no direct third-party import, but shares the same venv for `eval/run_spike.sh`).
+# only, no direct third-party import, but shares the same venv for `eval/run_spike.sh`),
+# tests/fieldguard_planning/test_ndvi_fusion.py + test_ndvi_georef.py (numpy only, no scipy).
 numpy==2.5.1
 scipy==1.18.0

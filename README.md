@@ -29,7 +29,11 @@ cell — is a documented stretch goal, ADR-002; v1 ships "avoid, return to next 
 - **Coverage integrity:** the ledger partition invariant (`coverage.check_ledger`) makes a
   silently-skipped cell a **test failure**; 5 previously-pending safety assertions (coverage-integrity +
   avoid-into-tree, across 4 scenarios) now pass against real flight logs the loop produced.
-- **Automated tests:** 55 (stdlib-only planning/safety suite + the eval spike harness), green in CI.
+- **Automated tests:** 94 (`tests/fieldguard_planning`, run via `PYTHONPATH=src python3 -m unittest
+  discover -s tests/fieldguard_planning`, + the eval spike harness), green in CI. The avoidance-loop/
+  coverage/geofence suite is stdlib-only (zero installs); the Weeks 5-6 NDVI fusion + georef-stitch
+  tests (`test_ndvi_fusion.py`, `test_ndvi_georef.py`) need numpy (already pinned in
+  `requirements-eval.txt`) — a scoped, documented exception, not a project-wide dependency change.
 
 ## Architecture (short version)
 ```

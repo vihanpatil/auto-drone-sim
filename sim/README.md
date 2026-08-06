@@ -5,13 +5,17 @@ be added without code changes — see [Regenerating the world](#regenerating-the
 
 - `worlds/farmguard_field.sdf` — the custom farm world: bounded field polygon (green ground plane),
   3 orchard tree rows (18 trees, static/geofenced obstacles), 3 scripted bird actors (dynamic
-  obstacles), and the `iris_with_gimbal` vehicle. **Generated** by `scripts/gen_farm_world.py` —
-  don't hand-edit; edit the `config/` inputs below and regenerate.
-- `models/` — reserved for future mesh/model assets (NDVI camera sensor plugin, Week 5-6). Empty
-  for now: the farm world uses only inline SDF primitives (boxes/cylinders/spheres), so it has no
-  dependency on this directory or on `GZ_SIM_RESOURCE_PATH` beyond what `ardupilot_gazebo` already
-  requires (see docs/WEEK1_BRINGUP.md §5) — a deliberate choice to avoid adding new resource-path
-  risk on top of the Week 1 gate.
+  obstacles), the `iris_with_gimbal` vehicle, and (ADR-007, Weeks 5-6) the dual-band NDVI sensor
+  mount (`iris_with_gimbal_ndvi`) plus a calibrated `<temperature>` on every visual in the world.
+  **Generated** by `scripts/gen_farm_world.py` — don't hand-edit; edit the `config/` inputs below
+  and regenerate.
+- `bridge/fg_sensor_bridge.yaml` — ros_gz_bridge config for the four `/fg/sensor/*` topics
+  (ADR-007). See `docs/WEEK5_VALIDATION.md` Gate 1.
+- `models/` — reserved for future mesh/model assets. Still empty: the farm world (including the
+  Week 5-6 NDVI sensor mount) uses only inline SDF primitives + first-class Gazebo sensor types, no
+  external meshes, so it has no dependency on this directory or on `GZ_SIM_RESOURCE_PATH` beyond
+  what `ardupilot_gazebo` already requires (see docs/WEEK1_BRINGUP.md §5) — a deliberate choice to
+  avoid adding new resource-path risk.
 - `spike/` — the ADR-003 NDVI-vs-RGB spike clip generator (separate concern, see `spike/README.md`).
 - `docker/` — the Week 1 starter container (see `docs/WEEK1_BRINGUP.md`).
 
@@ -22,6 +26,23 @@ be added without code changes — see [Regenerating the world](#regenerating-the
 | `config/field_polygon.json` | field boundary (home lat/lon, ENU polygon), mission altitude | `scripts/gen_boustrophedon.py` (mission) and `scripts/gen_farm_world.py` (world) — **the reason both stay geometrically consistent** |
 | `config/static_obstacles.json` | tree row layout (input) + the flattened per-tree obstacle list (generated output) | `scripts/gen_farm_world.py` (world); **flight-software's geofence/planner** (see contract below) |
 | `config/birds/farm_world_birds.json` | 3 scripted bird actor trajectories (piecewise-linear waypoints, there-and-back loops) | `scripts/gen_farm_world.py` (world) |
+| `config/ndvi_camera.json` | ADR-007 dual-band NDVI sensor mount: intrinsics/rate, the sensor-mount attachment (parent link + pose), and the per-material-class `<temperature>` calibration table | `scripts/gen_farm_world.py` (world); `scripts/check_ndvi_bands.py` (Gate 2 smoke test) |
+
+## NDVI sensor topics (ADR-007, Weeks 5-6)
+
+Locked contract, `docs/DECISIONS.md` ADR-007 — **not confirmed live yet**, see
+`docs/WEEK5_VALIDATION.md`:
+
+- `/fg/sensor/rgb/image` (`rgb8`) + `/fg/sensor/rgb/camera_info` — Red band; also the ADR-003
+  NDVI+RGB comparison arm.
+- `/fg/sensor/nir/image` (`mono16`) + `/fg/sensor/nir/camera_info` — Gazebo's thermal sensor
+  repurposed as synthetic NIR, per-visual `<temperature>` authored from `config/ndvi_camera.json`.
+- `/fg/ndvi/image` + `/fg/ndvi/camera_info` + `/fg/ndvi/preview` — **not built yet**; the fused
+  NDVI node is `flight-software-engineer`'s downstream Weeks 5-6 scope.
+
+Bridge these four topics with `sim/bridge/fg_sensor_bridge.yaml`
+(`ros2 run ros_gz_bridge parameter_bridge --ros-args -p config_file:=sim/bridge/fg_sensor_bridge.yaml`).
+Validate with `scripts/check_ndvi_bands.py` — see `docs/WEEK5_VALIDATION.md` Gate 2.
 
 ### Regenerating the world
 
@@ -131,8 +152,10 @@ the polygon that mission already sweeps.
 Validated in this (non-Docker) session:
 - `sim/worlds/farmguard_field.sdf` is well-formed XML (`xml.etree.ElementTree`, cross-checked with
   `xmllint --noout`).
-- Structural sanity: 19 `<model>` elements (1 ground plane + 18 trees), 3 `<actor>` elements, 1
-  vehicle `<include>`, no duplicate model/actor names.
+- Structural sanity: 20 `<model>` elements (1 ground plane + 18 trees + 1 `iris_with_gimbal_ndvi`
+  vehicle/sensor-mount wrapper), 3 `<actor>` elements, no duplicate model/actor names, and exactly
+  40 per-visual `gz::sim::systems::Thermal` plugins (1 ground + 18×2 tree trunk/canopy + 3 birds —
+  every visual in the world, ADR-007 Weeks 5-6).
 - Every computed tree position falls inside `config/field_polygon.json`'s polygon (generator
   raises otherwise).
 - `config/static_obstacles.json`'s `obstacles` array numerically matches the tree `<pose>` values
@@ -167,9 +190,17 @@ constraint — see `docs/WEEK1_BRINGUP.md`):**
 - Render/performance headroom for 3 actors + 18 static models on this project's known-slow
   llvmpipe software rendering path (macOS Docker Desktop, no GPU passthrough — see
   `docs/WEEK1_BRINGUP.md` "Known macOS gotchas" #1). Not expected to be a problem (all primitive
-  geometry, no textures/meshes) but unconfirmed.
+  geometry, no textures/meshes) but unconfirmed. Now also carries two camera-type sensors per frame
+  (ADR-007) — see the next bullet.
+- **(Weeks 5-6, ADR-007)** Everything about the dual-band NDVI sensor mount: whether
+  `gz-sim-thermal-system`/`gz-sim-thermal-sensor-system` actually load on this pinned Harmonic +
+  ogre2 build, whether the `iris_with_gimbal_ndvi` wrapper model's fixed-joint sensor-mount
+  attachment resolves, and whether the per-visual `<temperature>` calibration produces genuinely
+  different canopy/soil/bird readings. This is a **separate, dedicated gate** —
+  `docs/WEEK5_VALIDATION.md` — not folded into the two-shell flow above.
 
 **Human next step:** run the two-shell flow above once, confirm the world stays up and the mission
 completes, then update this section (or `docs/ROADMAP.md`) with the result. If it fails, the most
 likely first suspect (per this project's own prior debugging history) is `GZ_SIM_RESOURCE_PATH`
-missing `ardupilot_gazebo`'s `share` dir — check that before anything else.
+missing `ardupilot_gazebo`'s `share` dir — check that before anything else. Then run
+`docs/WEEK5_VALIDATION.md`'s three gates (Gate 0 is a hard kill-switch — do it first).

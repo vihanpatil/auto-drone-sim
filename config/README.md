@@ -14,4 +14,8 @@ Data-driven scenario + mission configuration so scenarios can be added without c
 - `sitl_params/dds_udp.parm` — enables AP_DDS (the ROS 2 `/ap/*` bridge) over UDP; load with
   `sim_vehicle.py --add-param-file`. See `docs/WEEK1_BRINGUP.md` §6b and
   `docs/DECISIONS.md` for the locked topic/frame-id contract this unblocks.
-- sensor configs: single-NDVI (primary) and second-sensor comparison arm — future (Week 5-6).
+- `ndvi_camera.json` — ADR-007 dual-band NDVI sensor mount (Weeks 5-6): RGB (Red band, also the
+  ADR-003 NDVI+RGB comparison arm) + Gazebo thermal sensor (repurposed as synthetic NIR) intrinsics,
+  the sensor-mount attachment pose, and the per-material-class `<temperature>` calibration table
+  (canopy/trunk/soil/bird). Consumed by `scripts/gen_farm_world.py` (world) and
+  `scripts/check_ndvi_bands.py` (the Gate 2 pixel smoke test, `docs/WEEK5_VALIDATION.md`).

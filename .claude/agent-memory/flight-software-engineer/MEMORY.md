@@ -1,1 +1,1 @@
-- [Node/topic map + coverage-debt/control-param notes](node_topic_map.md) — src/ package state, geofence API, XY clearance finding, ArduPilot gotchas (Week 2 snapshot, 2026-08-04)
+- [Node/topic map + coverage-debt/control-param notes](node_topic_map.md) — package layout, confirmed AP_DDS /ap/* contract, avoidance-loop live-run gotchas, Weeks 5-6 NDVI fusion/georef state (current as of 2026-08-05)
